@@ -7,7 +7,8 @@ VermilionDock_Object:
 
 	db 0 ; signs
 
-	db 0 ; objects
+	db 1 ; objects
+	object SPRITE_SLOWBRO, 21, 0, STAY, DOWN, 2, MEW, 5 ; person
 
 	; warp-to
 	warp_to 14, 0, VERMILION_DOCK_WIDTH
