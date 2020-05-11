@@ -2605,3 +2605,6 @@ MarowakPicFront:     INCBIN "pic/bmon/marowak.pic"
 MarowakPicBack:      INCBIN "pic/monback/marowakb.pic"
 ENDC
 
+SECTION "NewTruckMew", ROMX
+
+TruckSpriteGFX:        INCBIN "gfx/truck_sprite.2bpp"
