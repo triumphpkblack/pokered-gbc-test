@@ -27,14 +27,141 @@ VermilionDock_Script:
 	ld [wJoyIgnore], a
 	ret
 .asm_1db8d
-	CheckEventAfterBranchReuseHL EVENT_WALKED_OUT_OF_DOCK, EVENT_STARTED_WALKING_OUT_OF_DOCK
-	ret nz
-	ld a, [wSimulatedJoypadStatesIndex]
-	and a
-	ret nz
-	ld [wJoyIgnore], a
-	SetEventReuseHL EVENT_WALKED_OUT_OF_DOCK
-	ret
+    bit 5, [hl]
+    jr nz, .afterss
+    ld a, [wSimulatedJoypadStatesIndex]
+    and a
+    ret nz
+    ld [wJoyIgnore], a
+    set 5, [hl]
+    ret
+.afterss
+    ld bc, $105
+    call GetOWCoord
+    ld de, AfterSSTable
+    ld bc, $204
+    ld a, [de]
+    cp [hl]
+    jr z, .truckCheck
+.truckCheck
+    bit MEWINTRUCK, a ; is mew in the truck?
+    jp nz, ChangeTruckTile
+    ld c, HS_MEW_VERMILLION_DOCK
+    ld b, $2
+    ld hl, wMissableObjectFlags
+    predef FlagActionPredef
+    ld a, c
+    and a
+    jr nz, .skiphidingmew
+    ld a, HS_MEW_VERMILLION_DOCK
+    ld [wMissableObjectIndex], a
+    predef HideObject
+.skiphidingmew
+    ld a, [wd728]
+    bit 0, a ; using Strength?
+    ret z
+    ; the position for moving truck is $00, $15
+    ld hl, wYCoord
+    ld a, [hli]
+    and a
+    ret nz
+    ld a, [hl]
+    cp $16
+    ret nz
+    ; if the player is trying to walk left
+    ld a, [wPlayerMovingDirection]
+    cp 2
+    ret nz
+   
+    xor a
+    ld [$ff8c], a
+    ld a, $8
+    ld [$ff8d], a
+    call SetSpriteFacingDirection
+    ld a, $ff
+    ld [wJoyIgnore], a
+    ld [wUpdateSpritesEnabled], a
+    xor a
+    ld bc, $4c48
+    ld de, RedLeftOAMTable
+    call WriteOAMBlock
+    ld bc, (Bank(TruckSpriteGFX) << 8) | 8
+    ld hl, vChars1 + $400
+    ld de, TruckSpriteGFX
+    call CopyVideoData
+    ld hl, TruckOAMTable
+    ld bc, $20
+    ld de, wOAMBuffer + $20
+    call CopyData
+    ld a, $c
+    ld [wNewTileBlockID], a
+    ld bc, $a
+    predef ReplaceTileBlock
+    ; moving the truck
+    ld a, SFX_PUSH_BOULDER
+    call PlaySound
+    ld b, 32
+    ld de, 4
+.movingtruck
+    ld hl, wOAMBuffer + $21
+    ld a, 8
+.movingtruck2
+    dec [hl]
+    add hl, de
+    dec a
+    jr nz, .movingtruck2
+    ld c, 2
+    call DelayFrames
+    dec b
+    jr nz, .movingtruck
+    ld a, $3
+    ld [wNewTileBlockID], a
+    ld bc, $9
+    predef ReplaceTileBlock
+    ; show mew and print its dialogue
+    ld a, 1
+    ld [wUpdateSpritesEnabled], a
+    ld a, HS_MEW_VERMILLION_DOCK
+    ld [wMissableObjectIndex], a
+    predef ShowObject
+    ld c, 60
+    call DelayFrames
+    xor a
+    ld [wJoyIgnore], a
+    set MEWINTRUCK, [hl]
+    ret
+   
+ChangeTruckTile:
+    ld bc, $9
+    call GetOWCoord
+    ld a, [hl]
+    cp $3
+    ret z
+    ld a, $3
+    ld [hli], a
+    ld a, $c
+    ld [hl], a
+    jpba RedrawMapView
+   
+GetOWCoord:
+    ld hl, wOverworldMap + 2
+    ld a, [wCurMapWidth]
+    add $6
+    ld e, a
+    ld d, $0
+    add hl, de
+    add hl, de
+    inc b
+    inc c
+.bloop
+    add hl, de
+    dec b
+    jr nz, .bloop
+.cloop
+    inc hl
+    dec c
+    jr nz, .cloop
+    ret
 
 VermilionDock_1db9b:
 	SetEventForceReuseHL EVENT_SS_ANNE_LEFT
@@ -159,6 +286,24 @@ VermilionDockOAMBlock:
 	db $fd, $13
 	db $fe, $13
 	db $ff, $13
+	
+AfterSSTable:
+    db $1, $d, $15, $1
+    db $d, $d,  $d, $d
+   
+TruckOAMTable:
+    db $50, $28, $C0, $16 ; changed the atributte here to colorize the truck in pokered-gbc
+    db $50, $30, $C1, $16
+    db $50, $38, $C2, $16
+    db $50, $40, $C3, $16
+    db $58, $28, $C4, $16
+    db $58, $30, $C5, $16
+    db $58, $38, $C6, $16
+    db $58, $40, $C7, $16
+ 
+RedLeftOAMTable:
+    db $8,$0,$9,$0
+    db $a,$0,$b,$0
 
 VermilionDock_1dc7c:
 	ld h, d
@@ -206,9 +351,40 @@ endr
 	call DelayFrames
 	ret
 
+VermilionDock_ScriptPointers
+    dw CheckFightingMapTrainers
+    dw DisplayEnemyTrainerTextAndStartBattle
+    dw EndTrainerBattle
+
 VermilionDock_TextPointers:
 	dw VermilionDockText1
+	dw MewText
 
 VermilionDockText1:
 	TX_FAR _VermilionDockText1
 	db "@"
+
+MewTrainerHeader:
+    dbEventFlagBit EVENT_BEAT_MEW
+    db 0 ; view range
+    dwEventFlagAddress EVENT_BEAT_MEW
+    dw MewBattleText ; TextBeforeBattle
+    dw MewBattleText ; TextAfterBattle
+    dw MewBattleText ; TextEndBattle
+    dw MewBattleText ; TextEndBattle
+ 
+    db $ff
+ 
+MewText:
+    TX_ASM
+    ld hl, MewTrainerHeader
+    call TalkToTrainer
+    jp TextScriptEnd
+   
+MewBattleText:
+    TX_FAR _MewtwoBattleText
+    TX_ASM
+    ld a, MEW
+    call PlayCry
+    call WaitForSoundToFinish
+    jp TextScriptEnd
