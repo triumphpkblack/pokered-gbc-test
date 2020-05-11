@@ -37,4 +37,4 @@ INCLUDE "color/data/map_palette_constants.asm"
 
 ;Check Mew
 
-MEWINTRUCK     EQU 0
+MEWINTRUCK     EQU 1
